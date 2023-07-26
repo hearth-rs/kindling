@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "init",
+]
+
+[workspace.dependencies]
+hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "4e61d0e" }
