@@ -4,4 +4,6 @@ members = [
 ]
 
 [workspace.dependencies]
-hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "4e61d0e" }
+hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "050c772" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

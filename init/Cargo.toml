@@ -8,3 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 hearth-guest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.7"
