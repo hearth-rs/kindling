@@ -50,10 +50,34 @@ fn get_cargo() -> String {
 }
 
 fn build_service(root_path: &Path, package: &Package) {
-    let service_path = root_path.join("init").join(&package.name);
-    let is_clean = touch_dir(&service_path);
-    let module_path = service_path.join("service.wasm");
-    build_wasm(&package.name, &module_path, is_clean);
+    if let Some(service) = package.metadata.get("service") {
+        let name = service.get("name").unwrap().as_str().unwrap();
+        let service_path = root_path.join("init").join(name);
+        let is_clean = touch_dir(&service_path);
+        let module_path = service_path.join("service.wasm");
+        build_wasm(&package.name, &module_path, is_clean);
+
+        let mut config = toml::Table::new();
+
+        if let Some(description) = package.description.clone() {
+            config.insert("description".into(), description.into());
+        }
+
+        let targets: Vec<String> = package
+            .metadata
+            .get("targets")
+            .map(|targets| targets.as_array().unwrap().clone())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|target| target.as_str().unwrap().to_string())
+            .collect();
+
+        config.insert("targets".into(), targets.into());
+
+        let config = toml::to_string_pretty(&config).unwrap();
+        let config_path = service_path.join("service.toml");
+        std::fs::write(config_path, config.as_bytes()).unwrap();
+    }
 }
 
 fn build_wasm(package: &str, path: &Path, force_copy: bool) {
