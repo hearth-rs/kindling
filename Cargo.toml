@@ -1,8 +1,8 @@
 [workspace]
 members = [
-  "build",
   "init",
 ]
+exclude = ["build"]
 
 [workspace.dependencies]
 hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "050c772" }
