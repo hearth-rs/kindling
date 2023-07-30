@@ -1,0 +1,14 @@
+[package]
+name = "kindling-physics"
+version = "0.1.0"
+edition = "2021"
+description = "A guest-side physics service for Hearth."
+
+[package.metadata.service]
+name = "rs.hearth.kindling.Physics"
+targets = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
