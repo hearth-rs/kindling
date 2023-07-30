@@ -90,6 +90,25 @@ pub extern "C" fn run() {
         registry.send_json(&config, &caps);
         registries.insert(name, registry);
     }
+
+    let target_hook = |target_name: &str, hook_service: &str| {
+        let Some(hook) = Process::get_service(hook_service) else {
+            info!("Hook service {:?} is unavailable; skipping", hook_service);
+            return;
+        };
+
+        let Some(target) = registries.get(target_name) else {
+            info!("Hook target {:?} is unavailable; skipping", target_name);
+            return;
+        };
+
+        info!("Hooking {:?} with {:?} target", hook_service, target_name);
+        hook.send(&[], &[target]);
+    };
+
+    target_hook("server", "hearth.init.Server");
+    target_hook("client", "hearth.init.Client");
+    target_hook("ipc", "hearth.init.IPC");
 }
 
 pub struct Service {
