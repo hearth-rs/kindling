@@ -12,3 +12,4 @@ targets = []
 crate-type = ["cdylib"]
 
 [dependencies]
+hearth-guest.workspace = true
