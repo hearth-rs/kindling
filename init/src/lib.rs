@@ -21,7 +21,8 @@ macro_rules! info {
 }
 
 fn recv_json<T: for<'a> Deserialize<'a>>() -> (Vec<Process>, T) {
-    let Signal::Message(msg) = Signal::recv() else { panic!("expected msg") };
+    let signal = Signal::recv();
+    let Signal::Message(msg) = signal else { panic!("expected msg; got {:?}", signal) };
     let data = serde_json::from_slice(&msg.data).unwrap();
     (msg.caps, data)
 }
@@ -129,7 +130,24 @@ impl Service {
     pub fn start(&mut self) -> &Process {
         self.process.get_or_insert_with(|| {
             info!("starting {:?}", self.name);
-            Process::spawn(mock_service_process)
+
+            let fs = Process::get_service("hearth.fs.Filesystem").unwrap();
+            let lump = get_file(&fs, &format!("init/{}/service.wasm", self.name));
+
+            WASM_SPAWNER.send_json(
+                &wasm::WasmSpawnInfo {
+                    lump,
+                    entrypoint: None,
+                },
+                &[&SELF],
+            );
+
+            let signal = Signal::recv();
+            let Signal::Message(mut msg) = signal else {
+                panic!("expected message, received {:?}", signal);
+            };
+
+            msg.caps.remove(0)
         })
     }
 
@@ -140,11 +158,6 @@ impl Service {
     pub fn get_config(&self) -> &ServiceConfig {
         &self.config
     }
-}
-
-fn mock_service_process() {
-    info!("running mock service process");
-    loop {}
 }
 
 #[derive(Deserialize, Serialize)]
@@ -214,6 +227,7 @@ pub struct License {
 }
 
 fn request_fs(fs: &Process, request: fs::Request) -> fs::Success {
+    log!(ProcessLogLevel::Debug, "making fs request: {:?}", request);
     fs.send_json(&request, &[&SELF]);
     let (_caps, response) = recv_json::<fs::Response>();
     response.unwrap()
