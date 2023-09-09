@@ -1,0 +1,15 @@
+[package]
+name = "wm"
+version = "0.1.0"
+edition = "2021"
+description = "A window manager service for Hearth."
+
+[package.metadata.service]
+name = "rs.hearth.kindling.WindowManager"
+targets = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+hearth-guest.workspace = true
