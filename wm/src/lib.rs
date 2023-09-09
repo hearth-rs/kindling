@@ -21,6 +21,7 @@ fn spawn_terminal(factory: &Process, x: i32, y: i32, command: &str) {
             half_size: (1.0, 1.0).into(),
             opacity: 1.0,
             padding: Default::default(),
+            units_per_em: 0.04,
         }),
         &[&SELF],
     );
