@@ -109,7 +109,7 @@ pub extern "C" fn run() {
 
     target_hook("server", "hearth.init.Server");
     target_hook("client", "hearth.init.Client");
-    target_hook("ipc", "hearth.init.IPC");
+    target_hook("daemon", "hearth.init.Daemon");
 }
 
 pub struct Service {
