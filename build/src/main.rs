@@ -63,8 +63,7 @@ fn build_service(root_path: &Path, package: &Package) {
             config.insert("description".into(), description.into());
         }
 
-        let targets: Vec<String> = package
-            .metadata
+        let targets: Vec<String> = service
             .get("targets")
             .map(|targets| targets.as_array().unwrap().clone())
             .unwrap_or_default()
