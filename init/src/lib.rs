@@ -20,18 +20,11 @@ macro_rules! info {
     };
 }
 
-fn recv_json<T: for<'a> Deserialize<'a>>() -> (Vec<Process>, T) {
-    let signal = Signal::recv();
-    let Signal::Message(msg) = signal else { panic!("expected msg; got {:?}", signal) };
-    let data = serde_json::from_slice(&msg.data).unwrap();
-    (msg.caps, data)
-}
-
 #[no_mangle]
 pub extern "C" fn run() {
     hearth_guest::log(hearth_guest::ProcessLogLevel::Info, "init", "Hello world!");
 
-    let fs = Process::get_service("hearth.fs.Filesystem").unwrap();
+    let fs = REGISTRY.get_service("hearth.fs.Filesystem").unwrap();
     let mut graph = DiGraph::<Service, ()>::new();
     let mut names_to_idxs = HashMap::new();
 
@@ -87,13 +80,13 @@ pub extern "C" fn run() {
         let (service_names, caps): (Vec<String>, Vec<Process>) = services.into_iter().unzip();
         let caps: Vec<&Process> = caps.iter().collect();
         let config = RegistryConfig { service_names };
-        let registry = Process::spawn(registry);
+        let registry = Process::spawn(registry, None);
         registry.send_json(&config, &caps);
         registries.insert(name, registry);
     }
 
     let target_hook = |target_name: &str, hook_service: &str| {
-        let Some(hook) = Process::get_service(hook_service) else {
+        let Some(hook) = REGISTRY.get_service(hook_service) else {
             info!("Hook service {:?} is unavailable; skipping", hook_service);
             return;
         };
@@ -131,23 +124,18 @@ impl Service {
         self.process.get_or_insert_with(|| {
             info!("starting {:?}", self.name);
 
-            let fs = Process::get_service("hearth.fs.Filesystem").unwrap();
+            let fs = REGISTRY.get_service("hearth.fs.Filesystem").unwrap();
             let lump = get_file(&fs, &format!("init/{}/service.wasm", self.name));
 
-            WASM_SPAWNER.send_json(
-                &wasm::WasmSpawnInfo {
+            let (_msg, mut caps) = WASM_SPAWNER.request(
+                wasm::WasmSpawnInfo {
                     lump,
                     entrypoint: None,
                 },
-                &[&SELF],
+                &[REGISTRY.as_ref()],
             );
 
-            let signal = Signal::recv();
-            let Signal::Message(mut msg) = signal else {
-                panic!("expected message, received {:?}", signal);
-            };
-
-            msg.caps.remove(0)
+            caps.remove(0)
         })
     }
 
@@ -166,7 +154,7 @@ pub struct RegistryConfig {
 }
 
 fn registry() {
-    let (service_list, config) = recv_json::<RegistryConfig>();
+    let (config, service_list) = PARENT.recv_json::<RegistryConfig>();
     let mut services = HashMap::new();
     for (process, name) in service_list.into_iter().zip(config.service_names) {
         info!("now serving {:?}", name);
@@ -174,7 +162,7 @@ fn registry() {
     }
 
     loop {
-        let (caps, request) = recv_json::<registry::RegistryRequest>();
+        let (request, caps) = PARENT.recv_json::<registry::RegistryRequest>();
         let Some(reply) = caps.first() else { continue };
 
         use registry::RegistryRequest::*;
@@ -228,8 +216,10 @@ pub struct License {
 
 fn request_fs(fs: &Process, request: fs::Request) -> fs::Success {
     log!(ProcessLogLevel::Debug, "making fs request: {:?}", request);
-    fs.send_json(&request, &[&SELF]);
-    let (_caps, response) = recv_json::<fs::Response>();
+    let reply = Mailbox::new();
+    let reply_cap = reply.make_capability(Permissions::SEND);
+    fs.send_json(&request, &[&reply_cap]);
+    let (response, _caps) = reply.recv_json::<fs::Response>();
     response.unwrap()
 }
 
@@ -242,7 +232,9 @@ fn get_file(fs: &Process, path: &str) -> LumpId {
         },
     );
 
-    let fs::Success::Get(lump) = success else { panic!("expected Success::Get, got {:?}", success) };
+    let fs::Success::Get(lump) = success else {
+        panic!("expected Success::Get, got {:?}", success)
+    };
 
     lump
 }
@@ -262,7 +254,9 @@ fn list_files(fs: &Process, path: &str) -> Vec<fs::FileInfo> {
         },
     );
 
-    let fs::Success::List(files) = success else { panic!("expected Success::List, got {:?}", success) };
+    let fs::Success::List(files) = success else {
+        panic!("expected Success::List, got {:?}", success)
+    };
 
     files
 }
