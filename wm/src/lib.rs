@@ -1,7 +1,12 @@
+use std::{collections::HashSet, f32::consts::PI};
+
+use glam::{vec3, Mat3};
 use hearth_guest::{
+    debug_draw::{DebugDrawMesh, DebugDrawUpdate, DebugDrawVertex},
     terminal::{FactoryRequest, TerminalState, TerminalUpdate},
     Process, Signal, SELF,
 };
+use obj::IndexTuple;
 
 #[no_mangle]
 pub extern "C" fn run() {
@@ -12,7 +17,10 @@ pub extern "C" fn run() {
     spawn_terminal(&term_factory, 1, -1, "hollywood");
     spawn_terminal(&term_factory, 1, 1, "macchina -t Lithium");
 
-    spawn_grid();
+    let dd_factory = Process::get_service("hearth.DebugDrawFactory").unwrap();
+
+    spawn_grid(&dd_factory);
+    spawn_room(&dd_factory);
 }
 
 fn recv_process() -> Process {
@@ -41,18 +49,11 @@ fn spawn_terminal(factory: &Process, x: i32, y: i32, command: &str) {
     term.send_json(&TerminalUpdate::Input(format!("{}\n", command)), &[&SELF]);
 }
 
-fn spawn_grid() {
-    use glam::vec3;
-    use hearth_guest::debug_draw::*;
-
-    let debug_factory = Process::get_service("hearth.DebugDrawFactory").unwrap();
-    debug_factory.send_json(&(), &[&SELF]);
-    let dd = recv_process();
-
+fn spawn_grid(dd_factory: &Process) {
     let mut vertices = Vec::new();
 
     let size = 100;
-    let scale = 0.1;
+    let scale = 1.0;
     let color = [0, 255, 0];
 
     for x in -size..size {
@@ -79,11 +80,62 @@ fn spawn_grid() {
         });
     }
 
+    dd_factory.send_json(&(), &[&SELF]);
+    let dd = recv_process();
+
     dd.send_json::<Process>(
         &DebugDrawUpdate::Contents(DebugDrawMesh {
             indices: (0..(vertices.len() as u32)).collect(),
             vertices,
         }),
+        &[&SELF],
+    );
+}
+
+fn spawn_room(dd_factory: &Process) {
+    let obj = include_bytes!("viking_room.obj");
+    let model = obj::ObjData::load_buf(obj.as_slice()).unwrap();
+
+    let color = [255, 0, 255];
+    let mesh = &model.objects[0].groups[0];
+    let rotate = Mat3::from_rotation_y(PI / -2.0) * Mat3::from_rotation_x(PI / -2.0) * 3.0;
+
+    let vertices = model
+        .position
+        .iter()
+        .map(|v| DebugDrawVertex {
+            position: rotate * vec3(v[0], v[1], v[2]),
+            color,
+        })
+        .collect();
+
+    let mut edges = HashSet::new();
+    let mut indices = Vec::new();
+
+    for face in mesh.polys.iter() {
+        let mut make_edge = |v0: IndexTuple, v1: IndexTuple| {
+            let v0 = v0.0 as u32;
+            let v1 = v1.0 as u32;
+
+            let (v0, v1) = if v0 < v1 { (v0, v1) } else { (v1, v0) };
+
+            if edges.insert((v0, v1)) {
+                indices.push(v0);
+                indices.push(v1);
+            }
+        };
+
+        let face = &face.0;
+        make_edge(face[0], face[1]);
+        make_edge(face[0], face[2]);
+        make_edge(face[1], face[2]);
+    }
+
+    dd_factory.send_json(&(), &[&SELF]);
+    let dd = recv_process();
+
+    dd.send_json(
+        &DebugDrawUpdate::Contents(DebugDrawMesh { vertices, indices }),
         &[&SELF],
     );
 }

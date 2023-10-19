@@ -14,3 +14,4 @@ crate-type = ["cdylib"]
 [dependencies]
 glam = "0.20"
 hearth-guest.workspace = true
+obj = "0.10"
