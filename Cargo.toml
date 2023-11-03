@@ -8,6 +8,6 @@ members = [
 exclude = ["build"]
 
 [workspace.dependencies]
-hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "3b5e660" }
+hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "0d47adb" }
 serde = { version = "^1.0.103, <1.0.171", features = ["derive"] }
 serde_json = "1"

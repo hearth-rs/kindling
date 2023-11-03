@@ -54,7 +54,7 @@ pub extern "C" fn run() {
     // TODO start up init registry first and sandbox processes in it
 
     let sorted_services = toposort(&graph, None).unwrap();
-    let mut targets: HashMap<String, HashMap<String, Process>> = HashMap::new();
+    let mut targets: HashMap<String, HashMap<String, Capability>> = HashMap::new();
     for service in sorted_services {
         let service = &mut graph[service];
         let name = service.get_name().to_string();
@@ -77,10 +77,10 @@ pub extern "C" fn run() {
 
     let mut registries = HashMap::with_capacity(targets.len());
     for (name, services) in targets {
-        let (service_names, caps): (Vec<String>, Vec<Process>) = services.into_iter().unzip();
-        let caps: Vec<&Process> = caps.iter().collect();
+        let (service_names, caps): (Vec<String>, Vec<Capability>) = services.into_iter().unzip();
+        let caps: Vec<&Capability> = caps.iter().collect();
         let config = RegistryConfig { service_names };
-        let registry = Process::spawn(registry, None);
+        let registry = Capability::spawn(registry, None);
         registry.send_json(&config, &caps);
         registries.insert(name, registry);
     }
@@ -107,7 +107,7 @@ pub extern "C" fn run() {
 
 pub struct Service {
     name: String,
-    process: Option<Process>,
+    process: Option<Capability>,
     config: ServiceConfig,
 }
 
@@ -120,7 +120,7 @@ impl Service {
         }
     }
 
-    pub fn start(&mut self) -> &Process {
+    pub fn start(&mut self) -> &Capability {
         self.process.get_or_insert_with(|| {
             info!("starting {:?}", self.name);
 
@@ -214,7 +214,7 @@ pub struct License {
     pub file: String,
 }
 
-fn request_fs(fs: &Process, request: fs::Request) -> fs::Success {
+fn request_fs(fs: &Capability, request: fs::Request) -> fs::Success {
     log!(ProcessLogLevel::Debug, "making fs request: {:?}", request);
     let reply = Mailbox::new();
     let reply_cap = reply.make_capability(Permissions::SEND);
@@ -223,7 +223,7 @@ fn request_fs(fs: &Process, request: fs::Request) -> fs::Success {
     response.unwrap()
 }
 
-fn get_file(fs: &Process, path: &str) -> LumpId {
+fn get_file(fs: &Capability, path: &str) -> LumpId {
     let success = request_fs(
         fs,
         fs::Request {
@@ -239,13 +239,13 @@ fn get_file(fs: &Process, path: &str) -> LumpId {
     lump
 }
 
-fn read_file(fs: &Process, path: &str) -> Vec<u8> {
+fn read_file(fs: &Capability, path: &str) -> Vec<u8> {
     let lump = get_file(fs, path);
-    let lump = Lump::from_id(&lump);
+    let lump = Lump::load_by_id(&lump);
     lump.get_data()
 }
 
-fn list_files(fs: &Process, path: &str) -> Vec<fs::FileInfo> {
+fn list_files(fs: &Capability, path: &str) -> Vec<fs::FileInfo> {
     let success = request_fs(
         fs,
         fs::Request {
