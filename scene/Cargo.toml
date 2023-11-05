@@ -1,0 +1,20 @@
+[package]
+name = "kindling-scene"
+version = "0.1.0"
+edition = "2021"
+description = "Guest-side Hearth scene initialization."
+
+[package.metadata.service]
+name = "kindling.Scene"
+targets = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+glam = "0.20"
+hearth-guest.workspace = true
+image = "0.24"
+serde.workspace = true
+serde_json.workspace = true
+obj = "0.10"

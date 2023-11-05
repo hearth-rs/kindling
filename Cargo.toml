@@ -3,11 +3,12 @@ resolver = "2"
 members = [
   "init",
   "physics",
+  "scene",
   "wm",
 ]
 exclude = ["build"]
 
 [workspace.dependencies]
-hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "bea0b6b" }
+hearth-guest = { git = "https://github.com/hearth-rs/hearth", rev = "2f9b779" }
 serde = { version = "^1.0.103, <1.0.171", features = ["derive"] }
 serde_json = "1"
