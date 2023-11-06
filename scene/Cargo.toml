@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 glam = "0.20"
+gltf = "1.3"
 hearth-guest.workspace = true
 image = "0.24"
 serde.workspace = true

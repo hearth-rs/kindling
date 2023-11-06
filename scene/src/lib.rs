@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Mat4, Vec2, Vec3};
+use glam::{uvec2, vec3, Mat4, Vec2, Vec3, Vec4};
 use hearth_guest::{renderer::*, Lump, LumpId, RequestResponse, REGISTRY};
 use image::GenericImageView;
 use serde::Serialize;
@@ -48,6 +48,12 @@ pub extern "C" fn run() {
     )
     .0
     .unwrap();
+
+    spawn_gltf(
+        &ren,
+        include_bytes!("korakoe.vrm"),
+        Mat4::from_translation(vec3(0.0, 0.0, 1.7)) * Mat4::from_rotation_y(PI),
+    );
 }
 
 pub fn load_albedo_material(texture: &[u8]) -> LumpId {
@@ -101,6 +107,120 @@ pub fn load_obj(model: &[u8]) -> LumpId {
     mesh_data.joint_weights.resize(len, Default::default());
 
     json_lump(&mesh_data)
+}
+
+pub fn spawn_gltf(ren: &Renderer, src: &[u8], transform: Mat4) {
+    use gltf::*;
+
+    let (document, buffers, images) = import_slice(src).unwrap();
+
+    let images: Vec<_> = images
+        .into_iter()
+        .map(|image| {
+            json_lump(&TextureData {
+                label: None,
+                data: image.pixels.clone(),
+                size: uvec2(image.width, image.height),
+            })
+        })
+        .collect();
+
+    let materials: Vec<_> = document
+        .materials()
+        .map(|material| {
+            let pbr = material.pbr_metallic_roughness();
+            let base = pbr.base_color_texture().unwrap();
+            let base = base.texture().source();
+            let albedo = images[base.index()];
+            json_lump(&MaterialData { albedo })
+        })
+        .collect();
+
+    let mut objects = Vec::new();
+
+    for mesh in document.meshes() {
+        for prim in mesh.primitives() {
+            let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
+
+            let positions: Vec<_> = reader
+                .read_positions()
+                .expect("glTF primitive has no positions")
+                .map(Vec3::from)
+                .collect();
+
+            let len = positions.len();
+
+            let mut mesh_data = MeshData {
+                positions,
+                normals: vec![Default::default(); len],
+                tangents: vec![Default::default(); len],
+                uv0: vec![Default::default(); len],
+                uv1: vec![Default::default(); len],
+                colors: vec![Default::default(); len],
+                joint_indices: vec![Default::default(); len],
+                joint_weights: vec![Default::default(); len],
+                indices: Vec::new(),
+            };
+
+            if let Some(normals) = reader.read_normals() {
+                mesh_data.normals.clear();
+                mesh_data.normals.extend(normals.map(Vec3::from));
+            }
+
+            if let Some(tangents) = reader.read_tangents() {
+                mesh_data.tangents.clear();
+
+                mesh_data
+                    .tangents
+                    .extend(tangents.map(|t| Vec3::from_slice(&t)));
+            }
+
+            if let Some(uv0) = reader.read_tex_coords(0) {
+                mesh_data.uv0.clear();
+                mesh_data.uv0.extend(uv0.into_f32().map(Vec2::from));
+            }
+
+            if let Some(uv1) = reader.read_tex_coords(1) {
+                mesh_data.uv1.clear();
+                mesh_data.uv1.extend(uv1.into_f32().map(Vec2::from));
+            }
+
+            if let Some(colors) = reader.read_colors(0) {
+                mesh_data.colors.clear();
+                mesh_data.colors.extend(colors.into_rgba_u8());
+            }
+
+            if let Some(joints) = reader.read_joints(0) {
+                mesh_data.joint_indices.clear();
+                mesh_data.joint_indices.extend(joints.into_u16());
+            }
+
+            if let Some(weights) = reader.read_weights(0) {
+                mesh_data.joint_weights.clear();
+                mesh_data
+                    .joint_weights
+                    .extend(weights.into_f32().map(Vec4::from));
+            }
+
+            if let Some(indices) = reader.read_indices() {
+                mesh_data.indices.extend(indices.into_u32());
+            }
+
+            let mesh = json_lump(&mesh_data);
+            let material = materials[prim.material().index().unwrap()];
+
+            objects.push(RendererRequest::AddObject {
+                mesh,
+                skeleton: None,
+                material,
+                transform,
+            });
+        }
+    }
+
+    for object in objects {
+        ren.request(object, &[]).0.unwrap();
+    }
 }
 
 pub fn load_skybox(src: &[u8]) -> LumpId {
